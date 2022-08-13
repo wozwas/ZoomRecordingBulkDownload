@@ -1,0 +1,103 @@
+import requests
+import datetime
+import pytz
+import os
+import sys
+
+currentDateTime = datetime.datetime.now()
+date = currentDateTime.date()
+currentWeek = int(date.strftime("%W"))
+weeksBack = 2
+
+if '--weeks' in sys.argv:
+	weeksBack = sys.argv[2]
+
+# JWT token from your registered Zoom app on https://marketplace.zoom.us/: 
+JWT = '###'
+
+# Account identifier, such as email, username, or resource ID number for Zoom Rooms
+USERID = '3t0VCNO0TuGMCwYgnedGtw'
+
+cwd = os.getcwd()
+
+headers = {
+		'Authorization': 
+		'Bearer {}'.format(JWT),
+		'content-type':
+		'application/json',
+	}
+
+def main():
+
+			next_date = datetime.date.today()
+			start_date = next_date - datetime.timedelta(days=14)
+			get_recording(start_date, next_date)
+
+
+def get_recording(start_date, next_date):
+	
+	date_string = '%Y-%m-%d'
+	url = 'https://api.zoom.us/v2/users/{}/recordings?from={}&to={}&page_size=300&'.format(
+				USERID,
+				start_date.strftime(date_string),
+				next_date.strftime(date_string)
+			)
+
+	print('SEARCH: ', url)
+
+	response = requests.get(
+		url,
+		headers=headers
+	)
+
+	data = response.json()
+
+	if 'message' in data.keys():
+		print('ERROR: ', data['message'])
+		exit()
+	else:
+		for meeting in data['meetings']:
+			for record in meeting['recording_files']:
+				if record['status'] != 'completed':
+					continue
+				if record['file_type'] == 'MP4' or record['file_type'] == 'M4A' or record['file_type'] == 'TRANSCRIPT':
+						download_recording(
+						record['download_url'], 
+						record['recording_start'].replace(':','-'),
+						record['file_extension']
+					)
+				
+
+def download_recording(download_url, filename, extension):
+	import os	
+	download_access_url = '{}?access_token={}'.format(download_url, JWT)
+	print('DOWNLOADING: ', download_access_url)
+	response = requests.get(download_access_url, stream=True)
+
+	from datetime import datetime
+	from pytz import timezone
+	
+	filename = filename.replace("T"," ").replace("Z","")
+	filename_new = datetime.strptime(filename, '%Y-%m-%d %H-%M-%S')
+	filename_new = pytz.utc.localize(filename_new).astimezone(timezone('America/Indiana/Indianapolis'))
+	filename_string = str(filename_new).replace(":","-")[:-6]
+
+
+	file_path = os.path.dirname(__file__) + '/' + filename_string + '/'
+
+	if os.path.isdir(file_path) == False:
+		os.mkdir(file_path)
+	
+	if extension == 'MP4':
+		local_filename = '{}{}.mp4'.format(file_path, filename_string)
+	elif extension == 'M4A':
+		local_filename = '{}{}.m4a'.format(file_path, filename_string)
+	else:
+		local_filename = '{}{}.vtt'.format(file_path, filename_string)
+	with open(local_filename, 'wb') as f:
+		for chunk in response.iter_content(chunk_size=8192):
+			f.write(chunk)
+
+	   
+if __name__ == '__main__':
+	main()
