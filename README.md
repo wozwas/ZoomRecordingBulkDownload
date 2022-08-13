@@ -1,4 +1,4 @@
-# ZoomRecordingBulkDownload
+# Zoom Recording Bulk Download
 Uses any Zoom accounts unique identifier (username, email, ID, etc) to download any recording from the past X amount of days.
 
 # Purpose
